@@ -10,6 +10,7 @@ const schema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).default(7),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(10),
+  COMPANY_TIMEZONE: z.string().default('Asia/Kolkata'),
   BCRYPT_ROUNDS: z.coerce.number().int().min(4).max(15).default(12),
 });
 

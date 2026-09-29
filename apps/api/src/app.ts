@@ -5,6 +5,8 @@ import helmet from 'helmet';
 import { env } from './lib/env';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { authRouter } from './modules/auth/auth.routes';
+import { inventoryRouter } from './modules/inventory/inventory.routes';
+import { openingRouter } from './modules/opening-stock/opening.routes';
 import { mastersRouter } from './modules/masters/masters.routes';
 import { usersRouter } from './modules/users/users.routes';
 
@@ -25,6 +27,8 @@ export function createApp(opts: AppOptions = {}) {
   });
   app.use('/api/auth', authRouter(opts.loginRateLimitMax));
   app.use('/api/users', usersRouter);
+  app.use('/api/inventory', inventoryRouter);
+  app.use('/api/opening-stock', openingRouter);
   app.use('/api', mastersRouter);
 
   app.use(notFoundHandler);

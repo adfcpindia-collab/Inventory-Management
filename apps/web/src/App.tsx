@@ -1,13 +1,14 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth';
 import Layout from './components/Layout';
+import Inventory from './pages/Inventory';
+import OpeningStock from './pages/OpeningStock';
 import Login from './pages/Login';
 import Placeholder from './pages/Placeholder';
 import { CategoriesPage, ClientsPage, ItemsPage, SuppliersPage, UnitsPage } from './pages/masters';
 
 const LATER: [string, string][] = [
   ['', 'Dashboard'],
-  ['inventory', 'Inventory'],
   ['procurement', 'Procurement'],
   ['dispatch', 'Dispatch'],
   ['conversions', 'Conversions'],
@@ -28,6 +29,8 @@ export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
+        <Route path="inventory" element={<Inventory />} />
+        <Route path="opening-stock" element={<OpeningStock />} />
         <Route path="items" element={<ItemsPage />} />
         <Route path="categories" element={<CategoriesPage />} />
         <Route path="units" element={<UnitsPage />} />

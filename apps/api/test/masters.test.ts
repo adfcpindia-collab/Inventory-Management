@@ -193,16 +193,13 @@ describe('other masters', () => {
       'gstin',
       'phone',
     ]);
-    const ok = await request(app)
-      .post('/api/clients')
-      .set(bearer(t))
-      .send({
-        companyName: 'Acme',
-        gstin: '27aaacx1234a1z5',
-        email: 'A@Acme.com',
-        phone: '+91 98765 43210',
-        address: '',
-      });
+    const ok = await request(app).post('/api/clients').set(bearer(t)).send({
+      companyName: 'Acme',
+      gstin: '27aaacx1234a1z5',
+      email: 'A@Acme.com',
+      phone: '+91 98765 43210',
+      address: '',
+    });
     expect(ok.status).toBe(201);
     expect(ok.body).toMatchObject({ gstin: '27AAACX1234A1Z5', email: 'a@acme.com', address: null });
     expect(

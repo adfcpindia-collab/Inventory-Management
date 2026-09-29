@@ -55,6 +55,43 @@ export const api = {
     request<T>(p, { method: 'POST', body: b === undefined ? undefined : JSON.stringify(b) }),
   put: <T>(p: string, b: unknown) => request<T>(p, { method: 'PUT', body: JSON.stringify(b) }),
   del: <T>(p: string) => request<T>(p, { method: 'DELETE' }),
+  /** Sends a file as the raw request body (used for .xlsx uploads). */
+  async upload<T>(path: string, file: File, headers: Record<string, string> = {}): Promise<T> {
+    const send = () =>
+      fetch(`/api${path}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          ...headers,
+        },
+        body: file,
+      });
+    let res = await send();
+    if (res.status === 401 && (await refreshSession())) res = await send();
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new ApiError(
+        res.status,
+        body?.error?.message ?? 'Upload failed',
+        body?.error?.details,
+      );
+      (err as ApiError & { payload?: unknown }).payload = body?.error?.details;
+      throw err;
+    }
+    return body as T;
+  },
+  /** Authenticated file download (the token is not available to plain <a href>). */
+  async download(path: string, filename: string) {
+    let res = await raw(path);
+    if (res.status === 401 && (await refreshSession())) res = await raw(path);
+    if (!res.ok) throw new ApiError(res.status, 'Download failed');
+    const url = URL.createObjectURL(await res.blob());
+    const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+    a.click();
+    URL.revokeObjectURL(url);
+  },
   async login(email: string, password: string) {
     const res = await raw('/auth/login', {
       method: 'POST',

@@ -6,6 +6,7 @@ import { useAuth } from '../auth';
 const NAV: { to: string; label: string; sub?: boolean }[] = [
   { to: '/', label: 'Dashboard' },
   { to: '/inventory', label: 'Inventory' },
+  { to: '/opening-stock', label: 'Opening Stock', sub: true },
   { to: '/items', label: 'Items' },
   { to: '/categories', label: 'Categories', sub: true },
   { to: '/units', label: 'Units', sub: true },

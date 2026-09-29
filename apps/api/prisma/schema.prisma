@@ -29,17 +29,41 @@ enum ProductType {
   OTHER
 }
 
+enum TxnType {
+  OPENING_STOCK
+  PROCUREMENT
+  DISPATCH
+  CUSTOMER_RETURN
+  SUPPLIER_RETURN
+  CONVERSION_IN
+  CONVERSION_OUT
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+  DAMAGE
+  SCRAP
+  TRANSFER_IN
+  TRANSFER_OUT
+  REVERSAL
+}
+
+enum StockStatus {
+  USABLE
+  DAMAGED
+  INSPECTION
+}
+
 model User {
-  id            String         @id @default(uuid()) @db.Uuid
-  email         String         @unique
-  name          String
-  passwordHash  String         @map("password_hash")
-  role          Role
-  active        Boolean        @default(true)
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
-  refreshTokens RefreshToken[]
-  auditLogs     AuditLog[]
+  id                    String                 @id @default(uuid()) @db.Uuid
+  email                 String                 @unique
+  name                  String
+  passwordHash          String                 @map("password_hash")
+  role                  Role
+  active                Boolean                @default(true)
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+  refreshTokens         RefreshToken[]
+  auditLogs             AuditLog[]
+  inventoryTransactions InventoryTransaction[]
 
   @@map("users")
 }
@@ -104,6 +128,9 @@ model Item {
   category      Category     @relation(fields: [categoryId], references: [id])
   unit          Unit         @relation(fields: [unitId], references: [id])
 
+  txnLines InventoryTransactionItem[]
+  balances StockBalance[]
+
   @@index([categoryId])
   @@index([unitId])
   @@index([name])
@@ -123,6 +150,8 @@ model Client {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  transactions InventoryTransaction[]
+
   @@index([companyName])
   @@map("clients")
 }
@@ -140,6 +169,8 @@ model Supplier {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  transactions InventoryTransaction[]
+
   @@index([companyName])
   @@map("suppliers")
 }
@@ -153,6 +184,9 @@ model Warehouse {
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  txnLines InventoryTransactionItem[]
+  balances StockBalance[]
 
   @@map("warehouses")
 }
@@ -172,4 +206,78 @@ model AuditLog {
   @@index([userId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+/// Append-only header of one stock movement. Enforced by DB trigger; corrections are REVERSAL rows.
+model InventoryTransaction {
+  id             String                     @id @default(uuid()) @db.Uuid
+  txnNo          String                     @unique @default(dbgenerated("('TXN-' || lpad(nextval('inventory_txn_seq')::text, 8, '0'))")) @map("txn_no")
+  type           TxnType
+  /// Business date (not the created timestamp).
+  txnDate        DateTime                   @map("txn_date") @db.Date
+  referenceType  String?                    @map("reference_type")
+  referenceId    String?                    @map("reference_id")
+  referenceNo    String?                    @map("reference_no")
+  clientId       String?                    @map("client_id") @db.Uuid
+  supplierId     String?                    @map("supplier_id") @db.Uuid
+  /// Links the legs of a transfer / conversion.
+  groupId        String?                    @map("group_id")
+  reversesTxnId  String?                    @unique @map("reverses_txn_id") @db.Uuid
+  idempotencyKey String?                    @unique @map("idempotency_key")
+  remarks        String?
+  createdById    String                     @map("created_by_id") @db.Uuid
+  createdAt      DateTime                   @default(now()) @map("created_at")
+  createdBy      User                       @relation(fields: [createdById], references: [id])
+  client         Client?                    @relation(fields: [clientId], references: [id])
+  supplier       Supplier?                  @relation(fields: [supplierId], references: [id])
+  reversesTxn    InventoryTransaction?      @relation("Reversal", fields: [reversesTxnId], references: [id])
+  reversedBy     InventoryTransaction?      @relation("Reversal")
+  lines          InventoryTransactionItem[]
+
+  @@index([txnDate])
+  @@index([type, txnDate])
+  @@index([referenceNo])
+  @@index([groupId])
+  @@index([clientId])
+  @@index([supplierId])
+  @@map("inventory_transactions")
+}
+
+model InventoryTransactionItem {
+  id          String               @id @default(uuid()) @db.Uuid
+  txnId       String               @map("txn_id") @db.Uuid
+  lineNo      Int                  @map("line_no")
+  itemId      String               @map("item_id") @db.Uuid
+  warehouseId String               @map("warehouse_id") @db.Uuid
+  stockStatus StockStatus          @default(USABLE) @map("stock_status")
+  qtyIn       Decimal              @default(0) @map("qty_in") @db.Decimal(18, 3)
+  qtyOut      Decimal              @default(0) @map("qty_out") @db.Decimal(18, 3)
+  /// Kept per line so FIFO / weighted-average valuation can be added later.
+  unitCost    Decimal?             @map("unit_cost") @db.Decimal(18, 2)
+  batchNo     String?              @map("batch_no")
+  serialNo    String?              @map("serial_no")
+  mfgDate     DateTime?            @map("mfg_date") @db.Date
+  expiryDate  DateTime?            @map("expiry_date") @db.Date
+  txn         InventoryTransaction @relation(fields: [txnId], references: [id])
+  item        Item                 @relation(fields: [itemId], references: [id])
+  warehouse   Warehouse            @relation(fields: [warehouseId], references: [id])
+
+  @@unique([txnId, lineNo])
+  @@index([itemId, warehouseId, stockStatus])
+  @@index([batchNo])
+  @@map("inventory_transaction_items")
+}
+
+/// Cache of the ledger. Only InventoryService writes here, inside the posting transaction.
+model StockBalance {
+  itemId      String      @map("item_id") @db.Uuid
+  warehouseId String      @map("warehouse_id") @db.Uuid
+  stockStatus StockStatus @map("stock_status")
+  qty         Decimal     @default(0) @db.Decimal(18, 3)
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  item        Item        @relation(fields: [itemId], references: [id])
+  warehouse   Warehouse   @relation(fields: [warehouseId], references: [id])
+
+  @@id([itemId, warehouseId, stockStatus])
+  @@map("stock_balances")
 }

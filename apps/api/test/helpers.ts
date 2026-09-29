@@ -9,7 +9,7 @@ export const PASSWORD = 'Sup3r-secret-pw';
 
 export async function resetDb() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE audit_logs, refresh_tokens, items, categories, units, clients, suppliers, warehouses, users CASCADE',
+    'TRUNCATE audit_logs, refresh_tokens, stock_balances, inventory_transaction_items, inventory_transactions, items, categories, units, clients, suppliers, warehouses, users CASCADE',
   );
 }
 
@@ -49,3 +49,33 @@ export const itemPayload = (categoryId: string, unitId: string, over: object = {
   sellingPrice: 150,
   ...over,
 });
+
+export async function seedWarehouse() {
+  return prisma.warehouse.create({ data: { code: 'MAIN', name: 'Main', isDefault: true } });
+}
+
+/** Category + unit + default warehouse + N items (codes ITEM-1..N). */
+export async function seedWorld(itemCount = 2) {
+  const { category, unit } = await seedRefData();
+  const warehouse = await seedWarehouse();
+  const items = [];
+  for (let i = 1; i <= itemCount; i++) {
+    items.push(
+      await prisma.item.create({
+        data: {
+          code: `ITEM-${i}`,
+          name: `Item ${i}`,
+          categoryId: category.id,
+          unitId: unit.id,
+          productType: 'FINISHED_GOOD',
+        },
+      }),
+    );
+  }
+  return { category, unit, warehouse, items };
+}
+
+export const isoDate = (offsetDays = 0) => {
+  const d = new Date(Date.now() + offsetDays * 86_400_000);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(d);
+};
