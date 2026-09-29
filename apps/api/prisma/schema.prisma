@@ -52,6 +52,12 @@ enum StockStatus {
   INSPECTION
 }
 
+enum DocStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+}
+
 model User {
   id                    String                 @id @default(uuid()) @db.Uuid
   email                 String                 @unique
@@ -64,6 +70,9 @@ model User {
   refreshTokens         RefreshToken[]
   auditLogs             AuditLog[]
   inventoryTransactions InventoryTransaction[]
+
+  procurementsCreated Procurement[] @relation("ProcCreatedBy")
+  dispatchesCreated   Dispatch[]    @relation("DispCreatedBy")
 
   @@map("users")
 }
@@ -102,6 +111,9 @@ model Unit {
   updatedAt DateTime @updatedAt @map("updated_at")
   items     Item[]
 
+  procurementLines ProcurementItem[]
+  dispatchLines    DispatchItem[]
+
   @@map("units")
 }
 
@@ -131,6 +143,9 @@ model Item {
   txnLines InventoryTransactionItem[]
   balances StockBalance[]
 
+  procurementLines ProcurementItem[]
+  dispatchLines    DispatchItem[]
+
   @@index([categoryId])
   @@index([unitId])
   @@index([name])
@@ -152,6 +167,8 @@ model Client {
 
   transactions InventoryTransaction[]
 
+  dispatches Dispatch[]
+
   @@index([companyName])
   @@map("clients")
 }
@@ -171,6 +188,8 @@ model Supplier {
 
   transactions InventoryTransaction[]
 
+  procurements Procurement[]
+
   @@index([companyName])
   @@map("suppliers")
 }
@@ -187,6 +206,9 @@ model Warehouse {
 
   txnLines InventoryTransactionItem[]
   balances StockBalance[]
+
+  procurements Procurement[]
+  dispatches   Dispatch[]
 
   @@map("warehouses")
 }
@@ -234,6 +256,9 @@ model InventoryTransaction {
   reversedBy     InventoryTransaction?      @relation("Reversal")
   lines          InventoryTransactionItem[]
 
+  procurement Procurement?
+  dispatch    Dispatch?
+
   @@index([txnDate])
   @@index([type, txnDate])
   @@index([referenceNo])
@@ -280,4 +305,108 @@ model StockBalance {
 
   @@id([itemId, warehouseId, stockStatus])
   @@map("stock_balances")
+}
+
+model Procurement {
+  id             String                @id @default(uuid()) @db.Uuid
+  grnNo          String                @unique @map("grn_no")
+  txnDate        DateTime              @map("txn_date") @db.Date
+  supplierId     String                @map("supplier_id") @db.Uuid
+  warehouseId    String                @map("warehouse_id") @db.Uuid
+  status         DocStatus             @default(DRAFT)
+  remarks        String?
+  idempotencyKey String?               @unique @map("idempotency_key")
+  /// Ledger transaction created on confirm.
+  txnId          String?               @unique @map("txn_id") @db.Uuid
+  confirmedAt    DateTime?             @map("confirmed_at")
+  cancelledAt    DateTime?             @map("cancelled_at")
+  cancelReason   String?               @map("cancel_reason")
+  createdById    String                @map("created_by_id") @db.Uuid
+  confirmedById  String?               @map("confirmed_by_id") @db.Uuid
+  cancelledById  String?               @map("cancelled_by_id") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  supplier       Supplier              @relation(fields: [supplierId], references: [id])
+  warehouse      Warehouse             @relation(fields: [warehouseId], references: [id])
+  txn            InventoryTransaction? @relation(fields: [txnId], references: [id])
+  createdBy      User                  @relation("ProcCreatedBy", fields: [createdById], references: [id])
+  lines          ProcurementItem[]
+
+  @@index([txnDate])
+  @@index([supplierId])
+  @@index([status])
+  @@map("procurements")
+}
+
+model ProcurementItem {
+  id            String      @id @default(uuid()) @db.Uuid
+  procurementId String      @map("procurement_id") @db.Uuid
+  lineNo        Int         @map("line_no")
+  itemId        String      @map("item_id") @db.Uuid
+  unitId        String      @map("unit_id") @db.Uuid
+  qty           Decimal     @db.Decimal(18, 3)
+  rate          Decimal     @db.Decimal(18, 2)
+  gstRate       Decimal     @default(0) @map("gst_rate") @db.Decimal(5, 2)
+  /// qty * rate * (1 + gst/100), computed server-side.
+  amount        Decimal     @db.Decimal(18, 2)
+  batchNo       String?     @map("batch_no")
+  procurement   Procurement @relation(fields: [procurementId], references: [id], onDelete: Cascade)
+  item          Item        @relation(fields: [itemId], references: [id])
+  unit          Unit        @relation(fields: [unitId], references: [id])
+
+  @@unique([procurementId, lineNo])
+  @@index([itemId])
+  @@map("procurement_items")
+}
+
+model Dispatch {
+  id             String                @id @default(uuid()) @db.Uuid
+  challanNo      String                @unique @map("challan_no")
+  txnDate        DateTime              @map("txn_date") @db.Date
+  clientId       String                @map("client_id") @db.Uuid
+  warehouseId    String                @map("warehouse_id") @db.Uuid
+  address        String?
+  vehicleNo      String?               @map("vehicle_no")
+  driverName     String?               @map("driver_name")
+  salesOrderNo   String?               @map("sales_order_no")
+  status         DocStatus             @default(DRAFT)
+  remarks        String?
+  idempotencyKey String?               @unique @map("idempotency_key")
+  txnId          String?               @unique @map("txn_id") @db.Uuid
+  confirmedAt    DateTime?             @map("confirmed_at")
+  cancelledAt    DateTime?             @map("cancelled_at")
+  cancelReason   String?               @map("cancel_reason")
+  createdById    String                @map("created_by_id") @db.Uuid
+  confirmedById  String?               @map("confirmed_by_id") @db.Uuid
+  cancelledById  String?               @map("cancelled_by_id") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  client         Client                @relation(fields: [clientId], references: [id])
+  warehouse      Warehouse             @relation(fields: [warehouseId], references: [id])
+  txn            InventoryTransaction? @relation(fields: [txnId], references: [id])
+  createdBy      User                  @relation("DispCreatedBy", fields: [createdById], references: [id])
+  lines          DispatchItem[]
+
+  @@index([txnDate])
+  @@index([clientId])
+  @@index([status])
+  @@map("dispatches")
+}
+
+model DispatchItem {
+  id         String   @id @default(uuid()) @db.Uuid
+  dispatchId String   @map("dispatch_id") @db.Uuid
+  lineNo     Int      @map("line_no")
+  itemId     String   @map("item_id") @db.Uuid
+  unitId     String   @map("unit_id") @db.Uuid
+  qty        Decimal  @db.Decimal(18, 3)
+  rate       Decimal? @db.Decimal(18, 2)
+  amount     Decimal? @db.Decimal(18, 2)
+  dispatch   Dispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+  item       Item     @relation(fields: [itemId], references: [id])
+  unit       Unit     @relation(fields: [unitId], references: [id])
+
+  @@unique([dispatchId, lineNo])
+  @@index([itemId])
+  @@map("dispatch_items")
 }

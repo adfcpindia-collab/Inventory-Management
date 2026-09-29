@@ -45,3 +45,25 @@ ADMIN/MANAGER only.
 `GET /api/inventory/ledger` — running balance per item computed over the item's history in the chosen
 warehouse/bucket scope (default `USABLE`); display filters (dates, type, client, supplier, user,
 reference) never change the balance/opening figures.
+
+## Documents: procurement (GRN) and dispatch (challan)
+`DRAFT → CONFIRMED → CANCELLED`. Only CONFIRMED affects stock. Drafts are editable and have no ledger
+effect. Numbers (`grn_no`, `challan_no`) are unique case-insensitively (DB unique index on `lower()`)
+and stay reserved after cancellation.
+
+- **Confirm** row-locks the document, then calls `InventoryService.post(…, tx)` (PROCUREMENT in / DISPATCH
+  out of USABLE stock) and flips the status in ONE DB transaction; the document stores `txn_id`. The ledger
+  post uses idempotency key `<doc>-confirm:<id>`, and confirming an already-confirmed document returns it
+  unchanged, so double-clicks and retries cannot double-post. If any line is short the whole document is
+  rejected (409 with item codes and available/needed quantities) and nothing changes.
+- **Cancel** (MANAGER/ADMIN): a draft just becomes CANCELLED; a confirmed document calls
+  `InventoryService.reverse` in the same transaction, refused (409) if it would make stock negative
+  (e.g. received goods already dispatched).
+- **Validation:** items and parties must exist and be active (checked again at confirm); a line's unit is
+  always the item's unit (a different `unitId` is rejected); qty > 0 with ≤ 3 decimals; amounts are computed
+  server-side (`qty × rate × (1 + GST%)`, GST defaults to the item's rate).
+- **Backdating:** confirming a document dated before today needs MANAGER/ADMIN; future dates are rejected.
+- `Idempotency-Key` header on create returns the original document for a repeated request.
+- `post()` reads and checks every stock bucket before writing any balance, so a caller that catches a
+  shortage inside its own transaction never keeps partial updates.
+- Printable challan: `/dispatch/:id/print` (browser print / Save as PDF).

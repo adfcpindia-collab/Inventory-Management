@@ -3,14 +3,21 @@ import { useAuth } from './auth';
 import Layout from './components/Layout';
 import Inventory from './pages/Inventory';
 import OpeningStock from './pages/OpeningStock';
+import ChallanPrint from './pages/ChallanPrint';
+import {
+  DispatchDetail,
+  DispatchEdit,
+  DispatchList,
+  ProcurementDetail,
+  ProcurementEdit,
+  ProcurementList,
+} from './pages/documents';
 import Login from './pages/Login';
 import Placeholder from './pages/Placeholder';
 import { CategoriesPage, ClientsPage, ItemsPage, SuppliersPage, UnitsPage } from './pages/masters';
 
 const LATER: [string, string][] = [
   ['', 'Dashboard'],
-  ['procurement', 'Procurement'],
-  ['dispatch', 'Dispatch'],
   ['conversions', 'Conversions'],
   ['returns', 'Returns'],
   ['adjustments', 'Adjustments'],
@@ -28,7 +35,16 @@ export default function App() {
   if (!user) return <Login />;
   return (
     <Routes>
+      <Route path="dispatch/:id/print" element={<ChallanPrint />} />
       <Route element={<Layout />}>
+        <Route path="procurement" element={<ProcurementList />} />
+        <Route path="procurement/new" element={<ProcurementEdit />} />
+        <Route path="procurement/:id" element={<ProcurementDetail />} />
+        <Route path="procurement/:id/edit" element={<ProcurementEdit />} />
+        <Route path="dispatch" element={<DispatchList />} />
+        <Route path="dispatch/new" element={<DispatchEdit />} />
+        <Route path="dispatch/:id" element={<DispatchDetail />} />
+        <Route path="dispatch/:id/edit" element={<DispatchEdit />} />
         <Route path="inventory" element={<Inventory />} />
         <Route path="opening-stock" element={<OpeningStock />} />
         <Route path="items" element={<ItemsPage />} />

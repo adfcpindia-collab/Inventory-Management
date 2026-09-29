@@ -159,6 +159,9 @@ async function postInTx(
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([, v]) => v);
   const shortages: InsufficientStockDetail[] = [];
+  const updates: { b: (typeof buckets)[number]; next: Dec }[] = [];
+  // Pass 1: lock + read every bucket and collect ALL shortages before writing anything, so a
+  // caller that catches the error inside its own transaction never keeps partial balance updates.
   for (const b of buckets) {
     await tx.$executeRaw`
       INSERT INTO stock_balances (item_id, warehouse_id, stock_status, qty, updated_at)
@@ -179,15 +182,17 @@ async function postInTx(
         available: current.toFixed(3),
         requested: b.delta.abs().toFixed(3),
       });
-      continue;
-    }
+    } else updates.push({ b, next });
+  }
+  if (shortages.length) {
+    throw conflict('Insufficient stock: this would make stock negative', { shortages });
+  }
+  // Pass 2: apply.
+  for (const { b, next } of updates) {
     await tx.$executeRaw`
       UPDATE stock_balances SET qty = ${next.toFixed(3)}::numeric, updated_at = now()
       WHERE item_id = ${b.itemId}::uuid AND warehouse_id = ${b.warehouseId}::uuid
         AND stock_status = ${b.stockStatus}::"StockStatus"`;
-  }
-  if (shortages.length) {
-    throw conflict('Insufficient stock: this would make stock negative', { shortages });
   }
 
   // Backdated movements must not make any historical balance negative either.

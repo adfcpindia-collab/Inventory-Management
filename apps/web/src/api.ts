@@ -51,8 +51,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   get: <T>(p: string) => request<T>(p),
-  post: <T>(p: string, b?: unknown) =>
-    request<T>(p, { method: 'POST', body: b === undefined ? undefined : JSON.stringify(b) }),
+  post: <T>(p: string, b?: unknown, headers?: Record<string, string>) =>
+    request<T>(p, {
+      method: 'POST',
+      body: b === undefined ? undefined : JSON.stringify(b),
+      headers,
+    }),
   put: <T>(p: string, b: unknown) => request<T>(p, { method: 'PUT', body: JSON.stringify(b) }),
   del: <T>(p: string) => request<T>(p, { method: 'DELETE' }),
   /** Sends a file as the raw request body (used for .xlsx uploads). */
