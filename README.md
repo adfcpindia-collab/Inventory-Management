@@ -40,3 +40,15 @@ inactive record returns 409; `POST /:id/activate` restores. Every write is audit
 
 ## Inventory
 `npm run inventory:reconcile` recomputes balances from the ledger and exits non-zero on any mismatch.
+
+## Try it from a browser only (tablet / no local setup): GitHub Codespaces
+1. On GitHub open this repo, switch to the branch, then **Code → Codespaces → Create codespace**.
+2. Wait for setup to finish (first run takes a few minutes: it starts Postgres, installs, migrates, seeds).
+3. Open the **Ports** tab, find port **5173** ("Inventory app"), and open its forwarded address.
+4. Sign in with `admin@example.com` / `CHANGE-ME-strong-password`.
+
+If the app isn't running, open a terminal and run `npm run dev`.
+
+## Try it from a tablet on the same Wi‑Fi as your computer
+Run the normal setup on the computer, then open `http://<computer-ip>:5173` on the tablet
+(the dev server listens on all interfaces).

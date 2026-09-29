@@ -1,0 +1,15 @@
+{
+  "name": "Inventory Management",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "forwardPorts": [5173, 4000],
+  "portsAttributes": {
+    "5173": { "label": "Inventory app (open this one)", "onAutoForward": "notify" },
+    "4000": { "label": "API", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postStartCommand": "docker compose up -d",
+  "postAttachCommand": "bash .devcontainer/start.sh"
+}
