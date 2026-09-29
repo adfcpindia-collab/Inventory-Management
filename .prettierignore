@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+package-lock.json
+apps/api/prisma/migrations
+docs/SPEC.md
+docs/prompts
+CLAUDE.md

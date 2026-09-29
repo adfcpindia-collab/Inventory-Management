@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  STORE
+  VIEWER
+}
+
+enum TrackingType {
+  NONE
+  BATCH
+  SERIAL
+}
+
+enum ProductType {
+  FINISHED_GOOD
+  SEMI_FINISHED
+  RAW_MATERIAL
+  COMPONENT
+  CONSUMABLE
+  OTHER
+}
+
+model User {
+  id            String         @id @default(uuid()) @db.Uuid
+  email         String         @unique
+  name          String
+  passwordHash  String         @map("password_hash")
+  role          Role
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Category {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  items       Item[]
+
+  @@map("categories")
+}
+
+model Unit {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  items     Item[]
+
+  @@map("units")
+}
+
+model Item {
+  id            String       @id @default(uuid()) @db.Uuid
+  code          String       @unique
+  name          String
+  categoryId    String       @map("category_id") @db.Uuid
+  subcategory   String?
+  description   String?
+  unitId        String       @map("unit_id") @db.Uuid
+  productType   ProductType  @map("product_type")
+  trackingType  TrackingType @default(NONE) @map("tracking_type")
+  minLevel      Decimal      @default(0) @map("min_level") @db.Decimal(18, 3)
+  reorderLevel  Decimal      @default(0) @map("reorder_level") @db.Decimal(18, 3)
+  maxLevel      Decimal      @default(0) @map("max_level") @db.Decimal(18, 3)
+  hsnSac        String?      @map("hsn_sac")
+  gstRate       Decimal      @default(0) @map("gst_rate") @db.Decimal(5, 2)
+  purchasePrice Decimal      @default(0) @map("purchase_price") @db.Decimal(18, 2)
+  sellingPrice  Decimal      @default(0) @map("selling_price") @db.Decimal(18, 2)
+  active        Boolean      @default(true)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  category      Category     @relation(fields: [categoryId], references: [id])
+  unit          Unit         @relation(fields: [unitId], references: [id])
+
+  @@index([categoryId])
+  @@index([unitId])
+  @@index([name])
+  @@map("items")
+}
+
+model Client {
+  id            String   @id @default(uuid()) @db.Uuid
+  companyName   String   @map("company_name")
+  contactPerson String?  @map("contact_person")
+  phone         String?
+  email         String?
+  address       String?
+  gstin         String?
+  remarks       String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([companyName])
+  @@map("clients")
+}
+
+model Supplier {
+  id            String   @id @default(uuid()) @db.Uuid
+  companyName   String   @map("company_name")
+  contactPerson String?  @map("contact_person")
+  phone         String?
+  email         String?
+  address       String?
+  gstin         String?
+  remarks       String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([companyName])
+  @@map("suppliers")
+}
+
+model Warehouse {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  name      String
+  address   String?
+  isDefault Boolean  @default(false) @map("is_default")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("warehouses")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  oldValue  Json?    @map("old_value")
+  newValue  Json?    @map("new_value")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
