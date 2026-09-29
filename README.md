@@ -2,7 +2,7 @@
 
 Ledger-based inventory web app. Rules: [CLAUDE.md](CLAUDE.md). Spec: [docs/SPEC.md](docs/SPEC.md). Phase prompts: `docs/prompts/`.
 
-**Status:** Phases 1–4 complete (auth + masters; ledger engine + opening stock; procurement + dispatch; conversions). See [docs/INVENTORY_LOGIC.md](docs/INVENTORY_LOGIC.md).
+**Status:** Phases 1–5 complete (auth + masters; ledger engine + opening stock; procurement + dispatch; conversions; returns, damage/scrap, adjustments). See [docs/INVENTORY_LOGIC.md](docs/INVENTORY_LOGIC.md).
 
 ## Layout
 
@@ -15,11 +15,21 @@ Ledger-based inventory web app. Rules: [CLAUDE.md](CLAUDE.md). Spec: [docs/SPEC.
 ```bash
 cp .env.example apps/api/.env   # then edit the CHANGE-ME secrets
 docker compose up -d            # Postgres (or point DATABASE_URL at your own)
-npm install
+npm install                     # also runs `prisma generate` (postinstall)
 npm run db:migrate              # prisma migrate deploy
 npm run db:seed                 # units, categories, default warehouse, first ADMIN from SEED_ADMIN_*
 npm run dev                     # api :4000, web :5173 (proxies /api)
 ```
+
+Without Docker (macOS): install [Postgres.app](https://postgresapp.com), click **Initialize**, then create the
+role and database that `.env.example` expects:
+
+```bash
+/Applications/Postgres.app/Contents/Versions/latest/bin/psql -d postgres \
+  -c "CREATE USER inv WITH PASSWORD 'inv' CREATEDB;" -c "CREATE DATABASE inventory OWNER inv;"
+```
+
+If `db:seed` fails with "@prisma/client did not initialize yet", run `npm run db:generate -w @inventory/api`.
 
 ## Commands
 

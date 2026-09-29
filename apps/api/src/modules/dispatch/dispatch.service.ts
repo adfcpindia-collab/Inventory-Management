@@ -215,6 +215,14 @@ export async function cancel(id: string, reason: string, userId: string) {
     if (d.status === 'CANCELLED') throw conflict('Dispatch is already cancelled');
     let reversalNo: string | undefined;
     if (d.status === 'CONFIRMED') {
+      const returns = await tx.customerReturn.findMany({
+        where: { dispatchId: id, status: 'CONFIRMED' },
+        select: { returnNo: true },
+      });
+      if (returns.length)
+        throw conflict(
+          `Cannot cancel ${d.challanNo}: customer returns ${returns.map((r) => r.returnNo).join(', ')} are confirmed against it. Cancel them first`,
+        );
       try {
         reversalNo = (
           await reverse(d.txnId!, `${d.challanNo} cancelled: ${reason}`, userId, { tx })

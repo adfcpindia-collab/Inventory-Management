@@ -90,3 +90,62 @@ export async function explainShortage(tx: Tx, e: unknown): Promise<never> {
   }
   throw e;
 }
+
+interface QtyLine {
+  itemId: string;
+  qty: Prisma.Decimal;
+}
+
+const sumByItem = (lines: QtyLine[]) => {
+  const m = new Map<string, Prisma.Decimal>();
+  for (const l of lines) m.set(l.itemId, (m.get(l.itemId) ?? new D(0)).plus(l.qty));
+  return m;
+};
+
+/**
+ * A return may only cover items on the original document, and (this return + earlier CONFIRMED
+ * returns) may not exceed what the original moved. Call while the original document is row-locked
+ * so two concurrent returns cannot both pass.
+ */
+export async function assertWithinOriginal(
+  tx: Tx,
+  o: { label: string; original: QtyLine[]; prior: QtyLine[]; mine: QtyLine[] },
+) {
+  const orig = sumByItem(o.original);
+  const prior = sumByItem(o.prior);
+  const mine = sumByItem(o.mine);
+  const ids = [...mine.keys()];
+  const items = await tx.item.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, code: true },
+  });
+  const code = new Map(items.map((i) => [i.id, i.code]));
+  const foreign = ids.filter((id) => !orig.has(id));
+  if (foreign.length) {
+    throw unprocessable(
+      `Not on the original ${o.label}: ${foreign.map((id) => code.get(id) ?? id).join(', ')}`,
+    );
+  }
+  const over = ids
+    .map((id) => {
+      const total = orig.get(id)!;
+      const returned = prior.get(id) ?? new D(0);
+      const remaining = total.minus(returned);
+      return { id, total, returned, remaining, requested: mine.get(id)! };
+    })
+    .filter((r) => r.requested.gt(r.remaining));
+  if (over.length) {
+    const detail = over.map((r) => ({
+      itemId: r.id,
+      itemCode: code.get(r.id) ?? r.id,
+      original: r.total.toFixed(3),
+      alreadyReturned: r.returned.toFixed(3),
+      requested: r.requested.toFixed(3),
+      remaining: r.remaining.toFixed(3),
+    }));
+    throw conflict(
+      `Return exceeds the original ${o.label}: ${detail.map((d) => `${d.itemCode} (returnable ${d.remaining}, requested ${d.requested})`).join(', ')}`,
+      { overReturns: detail },
+    );
+  }
+}

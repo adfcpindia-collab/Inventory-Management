@@ -5,3 +5,4 @@ export * from './masters';
 export * from './inventory';
 export * from './documents';
 export * from './conversions';
+export * from './returns';

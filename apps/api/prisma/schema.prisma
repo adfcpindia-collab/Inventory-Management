@@ -58,6 +58,18 @@ enum DocStatus {
   CANCELLED
 }
 
+enum ReturnCondition {
+  GOOD
+  DAMAGED
+  NEEDS_INSPECTION
+}
+
+enum StockActionType {
+  DAMAGE
+  SCRAP
+  REPAIR
+}
+
 enum ApprovalStatus {
   NONE
   PENDING
@@ -82,6 +94,11 @@ model User {
 
   conversionsCreated Conversion[]         @relation("ConvCreatedBy")
   templatesCreated   ConversionTemplate[]
+
+  customerReturnsCreated CustomerReturn[]  @relation("CustRetCreatedBy")
+  supplierReturnsCreated SupplierReturn[]  @relation("SuppRetCreatedBy")
+  stockActionsCreated    StockActionDoc[]  @relation("StockActCreatedBy")
+  adjustmentsCreated     StockAdjustment[] @relation("AdjCreatedBy")
 
   @@map("users")
 }
@@ -126,6 +143,9 @@ model Unit {
   conversionInputs  ConversionInput[]
   conversionOutputs ConversionOutput[]
 
+  customerReturnLines CustomerReturnItem[]
+  supplierReturnLines SupplierReturnItem[]
+
   @@map("units")
 }
 
@@ -163,6 +183,11 @@ model Item {
   templateInputs    ConversionTemplateInput[]
   templateOutputs   ConversionTemplateOutput[]
 
+  customerReturnLines CustomerReturnItem[]
+  supplierReturnLines SupplierReturnItem[]
+  stockActions        StockActionDoc[]
+  adjustments         StockAdjustment[]
+
   @@index([categoryId])
   @@index([unitId])
   @@index([name])
@@ -186,6 +211,8 @@ model Client {
 
   dispatches Dispatch[]
 
+  customerReturns CustomerReturn[]
+
   @@index([companyName])
   @@map("clients")
 }
@@ -206,6 +233,8 @@ model Supplier {
   transactions InventoryTransaction[]
 
   procurements Procurement[]
+
+  supplierReturns SupplierReturn[]
 
   @@index([companyName])
   @@map("suppliers")
@@ -228,6 +257,11 @@ model Warehouse {
   dispatches   Dispatch[]
 
   conversions Conversion[]
+
+  customerReturns CustomerReturn[]
+  supplierReturns SupplierReturn[]
+  stockActions    StockActionDoc[]
+  adjustments     StockAdjustment[]
 
   @@map("warehouses")
 }
@@ -280,6 +314,12 @@ model InventoryTransaction {
 
   conversionOut Conversion? @relation("ConvOut")
   conversionIn  Conversion? @relation("ConvIn")
+
+  customerReturn  CustomerReturn?
+  supplierReturn  SupplierReturn?
+  stockAction     StockActionDoc?  @relation("StockActTxn")
+  stockActionPair StockActionDoc?  @relation("StockActPairTxn")
+  adjustment      StockAdjustment?
 
   @@index([txnDate])
   @@index([type, txnDate])
@@ -354,6 +394,8 @@ model Procurement {
   createdBy      User                  @relation("ProcCreatedBy", fields: [createdById], references: [id])
   lines          ProcurementItem[]
 
+  supplierReturns SupplierReturn[]
+
   @@index([txnDate])
   @@index([supplierId])
   @@index([status])
@@ -408,6 +450,8 @@ model Dispatch {
   txn            InventoryTransaction? @relation(fields: [txnId], references: [id])
   createdBy      User                  @relation("DispCreatedBy", fields: [createdById], references: [id])
   lines          DispatchItem[]
+
+  customerReturns CustomerReturn[]
 
   @@index([txnDate])
   @@index([clientId])
@@ -552,4 +596,179 @@ model ConversionOutput {
   @@unique([conversionId, lineNo])
   @@index([itemId])
   @@map("conversion_outputs")
+}
+
+model CustomerReturn {
+  id             String                @id @default(uuid()) @db.Uuid
+  returnNo       String                @unique @map("return_no")
+  txnDate        DateTime              @map("txn_date") @db.Date
+  clientId       String                @map("client_id") @db.Uuid
+  dispatchId     String                @map("dispatch_id") @db.Uuid
+  warehouseId    String                @map("warehouse_id") @db.Uuid
+  status         DocStatus             @default(DRAFT)
+  remarks        String?
+  idempotencyKey String?               @unique @map("idempotency_key")
+  txnId          String?               @unique @map("txn_id") @db.Uuid
+  confirmedAt    DateTime?             @map("confirmed_at")
+  cancelledAt    DateTime?             @map("cancelled_at")
+  cancelReason   String?               @map("cancel_reason")
+  createdById    String                @map("created_by_id") @db.Uuid
+  confirmedById  String?               @map("confirmed_by_id") @db.Uuid
+  cancelledById  String?               @map("cancelled_by_id") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  client         Client                @relation(fields: [clientId], references: [id])
+  dispatch       Dispatch              @relation(fields: [dispatchId], references: [id])
+  warehouse      Warehouse             @relation(fields: [warehouseId], references: [id])
+  txn            InventoryTransaction? @relation(fields: [txnId], references: [id])
+  createdBy      User                  @relation("CustRetCreatedBy", fields: [createdById], references: [id])
+  lines          CustomerReturnItem[]
+
+  @@index([txnDate])
+  @@index([dispatchId])
+  @@index([status])
+  @@map("customer_returns")
+}
+
+model CustomerReturnItem {
+  id        String          @id @default(uuid()) @db.Uuid
+  returnId  String          @map("return_id") @db.Uuid
+  lineNo    Int             @map("line_no")
+  itemId    String          @map("item_id") @db.Uuid
+  unitId    String          @map("unit_id") @db.Uuid
+  qty       Decimal         @db.Decimal(18, 3)
+  condition ReturnCondition
+  reason    String?
+  ret       CustomerReturn  @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  item      Item            @relation(fields: [itemId], references: [id])
+  unit      Unit            @relation(fields: [unitId], references: [id])
+
+  @@unique([returnId, lineNo])
+  @@index([itemId])
+  @@map("customer_return_items")
+}
+
+model SupplierReturn {
+  id             String                @id @default(uuid()) @db.Uuid
+  returnNo       String                @unique @map("return_no")
+  txnDate        DateTime              @map("txn_date") @db.Date
+  supplierId     String                @map("supplier_id") @db.Uuid
+  procurementId  String                @map("procurement_id") @db.Uuid
+  warehouseId    String                @map("warehouse_id") @db.Uuid
+  status         DocStatus             @default(DRAFT)
+  remarks        String?
+  idempotencyKey String?               @unique @map("idempotency_key")
+  txnId          String?               @unique @map("txn_id") @db.Uuid
+  confirmedAt    DateTime?             @map("confirmed_at")
+  cancelledAt    DateTime?             @map("cancelled_at")
+  cancelReason   String?               @map("cancel_reason")
+  createdById    String                @map("created_by_id") @db.Uuid
+  confirmedById  String?               @map("confirmed_by_id") @db.Uuid
+  cancelledById  String?               @map("cancelled_by_id") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  supplier       Supplier              @relation(fields: [supplierId], references: [id])
+  procurement    Procurement           @relation(fields: [procurementId], references: [id])
+  warehouse      Warehouse             @relation(fields: [warehouseId], references: [id])
+  txn            InventoryTransaction? @relation(fields: [txnId], references: [id])
+  createdBy      User                  @relation("SuppRetCreatedBy", fields: [createdById], references: [id])
+  lines          SupplierReturnItem[]
+
+  @@index([txnDate])
+  @@index([procurementId])
+  @@index([status])
+  @@map("supplier_returns")
+}
+
+model SupplierReturnItem {
+  id          String         @id @default(uuid()) @db.Uuid
+  returnId    String         @map("return_id") @db.Uuid
+  lineNo      Int            @map("line_no")
+  itemId      String         @map("item_id") @db.Uuid
+  unitId      String         @map("unit_id") @db.Uuid
+  qty         Decimal        @db.Decimal(18, 3)
+  /// Bucket the goods leave from (USABLE or DAMAGED).
+  stockStatus StockStatus    @default(USABLE) @map("stock_status")
+  reason      String?
+  ret         SupplierReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  item        Item           @relation(fields: [itemId], references: [id])
+  unit        Unit           @relation(fields: [unitId], references: [id])
+
+  @@unique([returnId, lineNo])
+  @@index([itemId])
+  @@map("supplier_return_items")
+}
+
+/// DAMAGE (USABLE→DAMAGED), SCRAP (removes DAMAGED), REPAIR (DAMAGED→USABLE). Reason is mandatory.
+model StockActionDoc {
+  id             String                @id @default(uuid()) @db.Uuid
+  actionNo       String                @unique @default(dbgenerated("('DMG-' || lpad(nextval('stock_action_no_seq')::text, 6, '0'))")) @map("action_no")
+  action         StockActionType
+  txnDate        DateTime              @map("txn_date") @db.Date
+  warehouseId    String                @map("warehouse_id") @db.Uuid
+  itemId         String                @map("item_id") @db.Uuid
+  qty            Decimal               @db.Decimal(18, 3)
+  reason         String
+  status         DocStatus             @default(DRAFT)
+  remarks        String?
+  idempotencyKey String?               @unique @map("idempotency_key")
+  /// DAMAGE/SCRAP: the single ledger txn. REPAIR: the DAMAGED-out leg (the USABLE-in leg is pairTxnId).
+  txnId          String?               @unique @map("txn_id") @db.Uuid
+  pairTxnId      String?               @unique @map("pair_txn_id") @db.Uuid
+  confirmedAt    DateTime?             @map("confirmed_at")
+  cancelledAt    DateTime?             @map("cancelled_at")
+  cancelReason   String?               @map("cancel_reason")
+  createdById    String                @map("created_by_id") @db.Uuid
+  confirmedById  String?               @map("confirmed_by_id") @db.Uuid
+  cancelledById  String?               @map("cancelled_by_id") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  warehouse      Warehouse             @relation(fields: [warehouseId], references: [id])
+  item           Item                  @relation(fields: [itemId], references: [id])
+  txn            InventoryTransaction? @relation("StockActTxn", fields: [txnId], references: [id])
+  pairTxn        InventoryTransaction? @relation("StockActPairTxn", fields: [pairTxnId], references: [id])
+  createdBy      User                  @relation("StockActCreatedBy", fields: [createdById], references: [id])
+
+  @@index([txnDate])
+  @@index([status])
+  @@map("stock_actions")
+}
+
+/// Physical-count correction. Always needs manager approval before it touches the ledger.
+model StockAdjustment {
+  id             String                @id @default(uuid()) @db.Uuid
+  adjustmentNo   String                @unique @default(dbgenerated("('ADJ-' || lpad(nextval('stock_adjustment_no_seq')::text, 6, '0'))")) @map("adjustment_no")
+  txnDate        DateTime              @map("txn_date") @db.Date
+  warehouseId    String                @map("warehouse_id") @db.Uuid
+  itemId         String                @map("item_id") @db.Uuid
+  stockStatus    StockStatus           @default(USABLE) @map("stock_status")
+  /// Balance at the time the draft was saved; confirm is refused if stock moved since.
+  systemQty      Decimal               @map("system_qty") @db.Decimal(18, 3)
+  physicalQty    Decimal               @map("physical_qty") @db.Decimal(18, 3)
+  /// physicalQty - systemQty (never zero).
+  difference     Decimal               @db.Decimal(18, 3)
+  reason         String
+  remarks        String?
+  status         DocStatus             @default(DRAFT)
+  approvalStatus ApprovalStatus        @default(NONE) @map("approval_status")
+  approvedById   String?               @map("approved_by_id") @db.Uuid
+  approvedAt     DateTime?             @map("approved_at")
+  idempotencyKey String?               @unique @map("idempotency_key")
+  txnId          String?               @unique @map("txn_id") @db.Uuid
+  confirmedAt    DateTime?             @map("confirmed_at")
+  cancelledAt    DateTime?             @map("cancelled_at")
+  cancelReason   String?               @map("cancel_reason")
+  createdById    String                @map("created_by_id") @db.Uuid
+  confirmedById  String?               @map("confirmed_by_id") @db.Uuid
+  cancelledById  String?               @map("cancelled_by_id") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  warehouse      Warehouse             @relation(fields: [warehouseId], references: [id])
+  item           Item                  @relation(fields: [itemId], references: [id])
+  txn            InventoryTransaction? @relation(fields: [txnId], references: [id])
+  createdBy      User                  @relation("AdjCreatedBy", fields: [createdById], references: [id])
+
+  @@index([txnDate])
+  @@index([status])
+  @@map("stock_adjustments")
 }

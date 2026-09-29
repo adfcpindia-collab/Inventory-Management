@@ -14,6 +14,23 @@ import {
 } from './pages/documents';
 import { ConversionDetail, ConversionEditor, ConversionList } from './pages/Conversions';
 import ConversionTemplates from './pages/ConversionTemplates';
+import { ReturnsIndex, ReturnsLayout } from './pages/Returns';
+import {
+  AdjustmentDetail,
+  AdjustmentList,
+  CustomerReturnDetail,
+  CustomerReturnList,
+  StockActionDetail,
+  StockActionList,
+  SupplierReturnDetail,
+  SupplierReturnList,
+} from './pages/returns/views';
+import {
+  AdjustmentEditor,
+  CustomerReturnEditor,
+  StockActionEditor,
+  SupplierReturnEditor,
+} from './pages/returns/editors';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Placeholder from './pages/Placeholder';
@@ -21,8 +38,6 @@ import { CategoriesPage, ClientsPage, ItemsPage, SuppliersPage, UnitsPage } from
 
 const LATER: [string, string][] = [
   ['', 'Dashboard'],
-  ['returns', 'Returns'],
-  ['adjustments', 'Adjustments'],
   ['warehouses', 'Warehouses'],
   ['reports', 'Reports'],
   ['exports', 'Excel Exports'],
@@ -47,6 +62,25 @@ export default function App() {
         <Route path="conversions/new" element={<ConversionEditor />} />
         <Route path="conversions/:id" element={<ConversionDetail />} />
         <Route path="conversions/:id/edit" element={<ConversionEditor />} />
+        <Route path="returns" element={<ReturnsLayout />}>
+          <Route index element={<ReturnsIndex />} />
+          <Route path="customer" element={<CustomerReturnList />} />
+          <Route path="customer/new" element={<CustomerReturnEditor />} />
+          <Route path="customer/:id" element={<CustomerReturnDetail />} />
+          <Route path="customer/:id/edit" element={<CustomerReturnEditor />} />
+          <Route path="supplier" element={<SupplierReturnList />} />
+          <Route path="supplier/new" element={<SupplierReturnEditor />} />
+          <Route path="supplier/:id" element={<SupplierReturnDetail />} />
+          <Route path="supplier/:id/edit" element={<SupplierReturnEditor />} />
+          <Route path="damage" element={<StockActionList />} />
+          <Route path="damage/new" element={<StockActionEditor />} />
+          <Route path="damage/:id" element={<StockActionDetail />} />
+          <Route path="damage/:id/edit" element={<StockActionEditor />} />
+        </Route>
+        <Route path="adjustments" element={<AdjustmentList />} />
+        <Route path="adjustments/new" element={<AdjustmentEditor />} />
+        <Route path="adjustments/:id" element={<AdjustmentDetail />} />
+        <Route path="adjustments/:id/edit" element={<AdjustmentEditor />} />
         <Route path="settings" element={<Settings />} />
         <Route path="dispatch" element={<DispatchList />} />
         <Route path="dispatch/new" element={<DispatchEdit />} />

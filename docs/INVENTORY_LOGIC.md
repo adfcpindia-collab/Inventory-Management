@@ -88,3 +88,31 @@ A conversion has N inputs and M outputs (1→1 through N→M). `DRAFT → CONFIR
   quantity is above it, a STORE confirm only marks the draft `approval_status = PENDING` (HTTP 202, no stock
   effect). A MANAGER/ADMIN confirming it is the approval (`APPROVED`, approver recorded). Editing a draft
   resets the approval. Each step is audited (`REQUEST_APPROVAL`, `CONFIRM`).
+
+## Returns, damage/scrap and adjustments
+All four are ledger-backed documents (`DRAFT → CONFIRMED → CANCELLED`) sharing the document router:
+create / edit draft / confirm / cancel (MANAGER/ADMIN), `Idempotency-Key`, backdating for MANAGER/ADMIN only.
+Confirm posts through `InventoryService.post(…, tx)` in the same DB transaction as the status change;
+cancel of a confirmed document reverses it and is refused (409) if that would make stock negative.
+
+- **Customer return** (`/api/customer-returns`, `CUSTOMER_RETURN`, IN). Must reference a CONFIRMED challan;
+  the client comes from the challan and the date cannot precede it. Each line has a condition:
+  `GOOD → USABLE`, `DAMAGED → DAMAGED`, `NEEDS_INSPECTION → INSPECTION`, so damaged goods never become
+  dispatchable automatically. Over-return rule: (this return + earlier CONFIRMED returns) ≤ dispatched, per
+  item, and items must be on the challan. Checked on create/edit for early feedback and again on confirm
+  with the challan row locked `FOR UPDATE`, so two concurrent returns cannot both pass.
+- **Supplier return** (`/api/supplier-returns`, `SUPPLIER_RETURN`, OUT). Same linkage/rule against a CONFIRMED
+  GRN. Each line leaves from `USABLE` or `DAMAGED` (return-to-supplier of damaged stock). Short stock → 409.
+- A challan/GRN cannot be cancelled while confirmed returns reference it (cancel the returns first).
+- **Damage / scrap / repair** (`/api/stock-actions`, numbers `DMG-######`, reason mandatory). `DAMAGE` =
+  one `DAMAGE` txn (USABLE out, DAMAGED in). `SCRAP` = one `SCRAP` txn (DAMAGED out). `REPAIR` = DAMAGED →
+  USABLE as an `ADJUSTMENT_OUT` + `ADJUSTMENT_IN` pair sharing `group_id = action no.` (there is no REPAIR
+  type in the fixed enum). Cancelling a repair reverses the USABLE-in leg first.
+- **Stock adjustment** (`/api/stock-adjustments`, `ADJ-######`). Stores a snapshot of the system qty, the
+  physical count and the difference (zero difference is rejected). **Approval is always required:** a STORE
+  "confirm" only sets `approval_status = PENDING` (HTTP 202, no ledger effect); a MANAGER/ADMIN confirm is the
+  approval and posts `ADJUSTMENT_IN` (surplus) / `ADJUSTMENT_OUT` (shortfall). Under the balance row lock the
+  system qty is re-read; if it differs from the snapshot the approval is refused (409, recount). Editing a
+  draft re-snapshots and withdraws a pending request; a manager cancelling a pending draft is the rejection.
+  A DB CHECK forbids a CONFIRMED adjustment without `APPROVED` + approver + txn.
+- Audit actions: `CREATE`, `UPDATE`, `REQUEST_APPROVAL`, `CONFIRM`, `CANCEL` (+ the ledger `POST`/`REVERSE`).
