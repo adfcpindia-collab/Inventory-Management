@@ -12,13 +12,15 @@ import {
   ProcurementEdit,
   ProcurementList,
 } from './pages/documents';
+import { ConversionDetail, ConversionEditor, ConversionList } from './pages/Conversions';
+import ConversionTemplates from './pages/ConversionTemplates';
+import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Placeholder from './pages/Placeholder';
 import { CategoriesPage, ClientsPage, ItemsPage, SuppliersPage, UnitsPage } from './pages/masters';
 
 const LATER: [string, string][] = [
   ['', 'Dashboard'],
-  ['conversions', 'Conversions'],
   ['returns', 'Returns'],
   ['adjustments', 'Adjustments'],
   ['warehouses', 'Warehouses'],
@@ -26,7 +28,6 @@ const LATER: [string, string][] = [
   ['exports', 'Excel Exports'],
   ['audit-logs', 'Audit Logs'],
   ['users', 'Users'],
-  ['settings', 'Settings'],
 ];
 
 export default function App() {
@@ -41,6 +42,12 @@ export default function App() {
         <Route path="procurement/new" element={<ProcurementEdit />} />
         <Route path="procurement/:id" element={<ProcurementDetail />} />
         <Route path="procurement/:id/edit" element={<ProcurementEdit />} />
+        <Route path="conversions" element={<ConversionList />} />
+        <Route path="conversions/templates" element={<ConversionTemplates />} />
+        <Route path="conversions/new" element={<ConversionEditor />} />
+        <Route path="conversions/:id" element={<ConversionDetail />} />
+        <Route path="conversions/:id/edit" element={<ConversionEditor />} />
+        <Route path="settings" element={<Settings />} />
         <Route path="dispatch" element={<DispatchList />} />
         <Route path="dispatch/new" element={<DispatchEdit />} />
         <Route path="dispatch/:id" element={<DispatchDetail />} />

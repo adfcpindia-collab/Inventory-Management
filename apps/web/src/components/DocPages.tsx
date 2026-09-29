@@ -30,14 +30,14 @@ const badge: Record<string, string> = {
   CONFIRMED: 'bg-green-100 text-green-800',
   CANCELLED: 'bg-slate-200 text-slate-600',
 };
-const Status = ({ s }: { s: string }) => (
+export const Status = ({ s }: { s: string }) => (
   <span className={`rounded px-2 py-0.5 text-xs font-medium ${badge[s]}`}>{s}</span>
 );
 const money = (v: unknown) =>
   v == null || v === ''
     ? '—'
     : Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const errText = (e: unknown) => (e instanceof Error ? e.message : 'Failed');
+export const errText = (e: unknown) => (e instanceof Error ? e.message : 'Failed');
 
 /* -------------------------------------------------------------------------- list */
 

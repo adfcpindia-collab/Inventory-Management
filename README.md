@@ -2,7 +2,7 @@
 
 Ledger-based inventory web app. Rules: [CLAUDE.md](CLAUDE.md). Spec: [docs/SPEC.md](docs/SPEC.md). Phase prompts: `docs/prompts/`.
 
-**Status:** Phases 1–3 complete (auth + masters; ledger engine + opening stock; procurement + dispatch). See [docs/INVENTORY_LOGIC.md](docs/INVENTORY_LOGIC.md).
+**Status:** Phases 1–4 complete (auth + masters; ledger engine + opening stock; procurement + dispatch; conversions). See [docs/INVENTORY_LOGIC.md](docs/INVENTORY_LOGIC.md).
 
 ## Layout
 

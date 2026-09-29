@@ -6,6 +6,9 @@ import { env } from './lib/env';
 import { authenticate } from './middleware/auth';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { authRouter } from './modules/auth/auth.routes';
+import { conversionRouter } from './modules/conversions/conversion.routes';
+import { templateRouter } from './modules/conversion-templates/template.routes';
+import { settingsRouter } from './modules/settings/settings.routes';
 import { dispatchRouter } from './modules/dispatch/dispatch.routes';
 import { procurementRouter } from './modules/procurement/procurement.routes';
 import { inventoryRouter } from './modules/inventory/inventory.routes';
@@ -34,6 +37,9 @@ export function createApp(opts: AppOptions = {}) {
   app.use('/api/opening-stock', openingRouter);
   app.use('/api/procurements', procurementRouter);
   app.use('/api/dispatches', dispatchRouter);
+  app.use('/api/conversions', conversionRouter);
+  app.use('/api/conversion-templates', templateRouter);
+  app.use('/api/settings', settingsRouter);
   app.get('/api/company', authenticate, (_req, res) => {
     res.json({ name: env.COMPANY_NAME, timezone: env.COMPANY_TIMEZONE });
   });

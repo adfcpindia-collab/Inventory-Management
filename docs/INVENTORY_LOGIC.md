@@ -67,3 +67,24 @@ and stay reserved after cancellation.
 - `post()` reads and checks every stock bucket before writing any balance, so a caller that catches a
   shortage inside its own transaction never keeps partial updates.
 - Printable challan: `/dispatch/:id/print` (browser print / Save as PDF).
+
+## Conversions
+A conversion has N inputs and M outputs (1→1 through N→M). `DRAFT → CONFIRMED → CANCELLED`; the ID
+(`CONV-000001`) is generated from a DB sequence and is unique.
+
+- **Confirm** runs in ONE DB transaction: `post(CONVERSION_OUT)` for the inputs (USABLE stock, checked as
+  a whole — any short input rejects everything with item codes and quantities), then `post(CONVERSION_IN)`
+  for the outputs. The two ledger headers share `group_id = conversion no.` and reference it. If anything
+  fails (including the second post), the transaction rolls back: no stock moves, the document stays DRAFT.
+- **Templates** (`conversion_templates` + inputs/outputs) store quantities for ONE run. A conversion built
+  from a template stores `template_id` and `multiplier`; lines are scaled with exact decimal arithmetic and a
+  result needing more than 3 decimals is rejected (never rounded). Explicit lines override the template, and
+  fully custom conversions need no template. Inactive templates cannot start new conversions.
+- **Rules:** items must be active and in their own unit; an item cannot be both an input and an output.
+- **Reversal (cancel, MANAGER/ADMIN):** reverses the outputs first, then the inputs — both reversals in one
+  transaction. If the outputs were already consumed, stock would go negative, so it is refused (409) and
+  nothing changes.
+- **Approval:** `settings.conversionApprovalThreshold` (ADMIN, Settings screen; blank = off). If total input
+  quantity is above it, a STORE confirm only marks the draft `approval_status = PENDING` (HTTP 202, no stock
+  effect). A MANAGER/ADMIN confirming it is the approval (`APPROVED`, approver recorded). Editing a draft
+  resets the approval. Each step is audited (`REQUEST_APPROVAL`, `CONFIRM`).

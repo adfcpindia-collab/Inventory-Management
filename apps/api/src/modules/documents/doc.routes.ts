@@ -79,7 +79,13 @@ export function documentRouter(svc: DocService, schema: ZodTypeAny) {
     writers,
     validate(idParam, 'params'),
     wrap(async (req, res) => {
-      res.json(s(await svc.confirm(req.params.id as string, req.user!.id, req.user!.role)));
+      const doc = (await svc.confirm(req.params.id as string, req.user!.id, req.user!.role)) as {
+        status: string;
+        approvalStatus?: string;
+      };
+      // 202: not confirmed yet — the draft is now waiting for a manager's approval.
+      const pending = doc.status === 'DRAFT' && doc.approvalStatus === 'PENDING';
+      res.status(pending ? 202 : 200).json(s(doc));
     }),
   );
   router.post(

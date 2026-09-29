@@ -9,7 +9,7 @@ export const PASSWORD = 'Sup3r-secret-pw';
 
 export async function resetDb() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE audit_logs, procurement_items, procurements, dispatch_items, dispatches, refresh_tokens, stock_balances, inventory_transaction_items, inventory_transactions, items, categories, units, clients, suppliers, warehouses, users CASCADE',
+    'TRUNCATE settings, conversion_template_inputs, conversion_template_outputs, conversion_templates, conversion_inputs, conversion_outputs, conversions, audit_logs, procurement_items, procurements, dispatch_items, dispatches, refresh_tokens, stock_balances, inventory_transaction_items, inventory_transactions, items, categories, units, clients, suppliers, warehouses, users CASCADE',
   );
 }
 

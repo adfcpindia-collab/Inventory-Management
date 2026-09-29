@@ -58,6 +58,12 @@ enum DocStatus {
   CANCELLED
 }
 
+enum ApprovalStatus {
+  NONE
+  PENDING
+  APPROVED
+}
+
 model User {
   id                    String                 @id @default(uuid()) @db.Uuid
   email                 String                 @unique
@@ -73,6 +79,9 @@ model User {
 
   procurementsCreated Procurement[] @relation("ProcCreatedBy")
   dispatchesCreated   Dispatch[]    @relation("DispCreatedBy")
+
+  conversionsCreated Conversion[]         @relation("ConvCreatedBy")
+  templatesCreated   ConversionTemplate[]
 
   @@map("users")
 }
@@ -114,6 +123,9 @@ model Unit {
   procurementLines ProcurementItem[]
   dispatchLines    DispatchItem[]
 
+  conversionInputs  ConversionInput[]
+  conversionOutputs ConversionOutput[]
+
   @@map("units")
 }
 
@@ -145,6 +157,11 @@ model Item {
 
   procurementLines ProcurementItem[]
   dispatchLines    DispatchItem[]
+
+  conversionInputs  ConversionInput[]
+  conversionOutputs ConversionOutput[]
+  templateInputs    ConversionTemplateInput[]
+  templateOutputs   ConversionTemplateOutput[]
 
   @@index([categoryId])
   @@index([unitId])
@@ -210,6 +227,8 @@ model Warehouse {
   procurements Procurement[]
   dispatches   Dispatch[]
 
+  conversions Conversion[]
+
   @@map("warehouses")
 }
 
@@ -258,6 +277,9 @@ model InventoryTransaction {
 
   procurement Procurement?
   dispatch    Dispatch?
+
+  conversionOut Conversion? @relation("ConvOut")
+  conversionIn  Conversion? @relation("ConvIn")
 
   @@index([txnDate])
   @@index([type, txnDate])
@@ -409,4 +431,125 @@ model DispatchItem {
   @@unique([dispatchId, lineNo])
   @@index([itemId])
   @@map("dispatch_items")
+}
+
+/// Key/value application settings (e.g. approval thresholds). Changes are audited.
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+model ConversionTemplate {
+  id          String                     @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  active      Boolean                    @default(true)
+  createdById String                     @map("created_by_id") @db.Uuid
+  createdAt   DateTime                   @default(now()) @map("created_at")
+  updatedAt   DateTime                   @updatedAt @map("updated_at")
+  createdBy   User                       @relation(fields: [createdById], references: [id])
+  inputs      ConversionTemplateInput[]
+  outputs     ConversionTemplateOutput[]
+  conversions Conversion[]
+
+  @@map("conversion_templates")
+}
+
+/// Quantities are per ONE unit of the template multiplier.
+model ConversionTemplateInput {
+  id         String             @id @default(uuid()) @db.Uuid
+  templateId String             @map("template_id") @db.Uuid
+  lineNo     Int                @map("line_no")
+  itemId     String             @map("item_id") @db.Uuid
+  qty        Decimal            @db.Decimal(18, 3)
+  template   ConversionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  item       Item               @relation(fields: [itemId], references: [id])
+
+  @@unique([templateId, lineNo])
+  @@map("conversion_template_inputs")
+}
+
+model ConversionTemplateOutput {
+  id         String             @id @default(uuid()) @db.Uuid
+  templateId String             @map("template_id") @db.Uuid
+  lineNo     Int                @map("line_no")
+  itemId     String             @map("item_id") @db.Uuid
+  qty        Decimal            @db.Decimal(18, 3)
+  template   ConversionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  item       Item               @relation(fields: [itemId], references: [id])
+
+  @@unique([templateId, lineNo])
+  @@map("conversion_template_outputs")
+}
+
+model Conversion {
+  id             String                @id @default(uuid()) @db.Uuid
+  conversionNo   String                @unique @default(dbgenerated("('CONV-' || lpad(nextval('conversion_no_seq')::text, 6, '0'))")) @map("conversion_no")
+  txnDate        DateTime              @map("txn_date") @db.Date
+  warehouseId    String                @map("warehouse_id") @db.Uuid
+  templateId     String?               @map("template_id") @db.Uuid
+  multiplier     Decimal               @default(1) @db.Decimal(18, 3)
+  status         DocStatus             @default(DRAFT)
+  remarks        String?
+  idempotencyKey String?               @unique @map("idempotency_key")
+  /// Ledger transactions created on confirm (inputs out, outputs in), linked by group_id = conversion_no.
+  outTxnId       String?               @unique @map("out_txn_id") @db.Uuid
+  inTxnId        String?               @unique @map("in_txn_id") @db.Uuid
+  approvalStatus ApprovalStatus        @default(NONE) @map("approval_status")
+  approvedById   String?               @map("approved_by_id") @db.Uuid
+  approvedAt     DateTime?             @map("approved_at")
+  confirmedAt    DateTime?             @map("confirmed_at")
+  cancelledAt    DateTime?             @map("cancelled_at")
+  cancelReason   String?               @map("cancel_reason")
+  createdById    String                @map("created_by_id") @db.Uuid
+  confirmedById  String?               @map("confirmed_by_id") @db.Uuid
+  cancelledById  String?               @map("cancelled_by_id") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  warehouse      Warehouse             @relation(fields: [warehouseId], references: [id])
+  template       ConversionTemplate?   @relation(fields: [templateId], references: [id])
+  createdBy      User                  @relation("ConvCreatedBy", fields: [createdById], references: [id])
+  outTxn         InventoryTransaction? @relation("ConvOut", fields: [outTxnId], references: [id])
+  inTxn          InventoryTransaction? @relation("ConvIn", fields: [inTxnId], references: [id])
+  inputs         ConversionInput[]
+  outputs        ConversionOutput[]
+
+  @@index([txnDate])
+  @@index([status])
+  @@map("conversions")
+}
+
+model ConversionInput {
+  id           String     @id @default(uuid()) @db.Uuid
+  conversionId String     @map("conversion_id") @db.Uuid
+  lineNo       Int        @map("line_no")
+  itemId       String     @map("item_id") @db.Uuid
+  unitId       String     @map("unit_id") @db.Uuid
+  qty          Decimal    @db.Decimal(18, 3)
+  conversion   Conversion @relation(fields: [conversionId], references: [id], onDelete: Cascade)
+  item         Item       @relation(fields: [itemId], references: [id])
+  unit         Unit       @relation(fields: [unitId], references: [id])
+
+  @@unique([conversionId, lineNo])
+  @@index([itemId])
+  @@map("conversion_inputs")
+}
+
+model ConversionOutput {
+  id           String     @id @default(uuid()) @db.Uuid
+  conversionId String     @map("conversion_id") @db.Uuid
+  lineNo       Int        @map("line_no")
+  itemId       String     @map("item_id") @db.Uuid
+  unitId       String     @map("unit_id") @db.Uuid
+  qty          Decimal    @db.Decimal(18, 3)
+  conversion   Conversion @relation(fields: [conversionId], references: [id], onDelete: Cascade)
+  item         Item       @relation(fields: [itemId], references: [id])
+  unit         Unit       @relation(fields: [unitId], references: [id])
+
+  @@unique([conversionId, lineNo])
+  @@index([itemId])
+  @@map("conversion_outputs")
 }
